@@ -18,8 +18,23 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   late Future<DashboardData> _data = widget.api.loadDashboard();
   int _selectedIndex = 0;
+  final Set<int> _updatingTaskIds = {};
 
   void _refresh() => setState(() => _data = widget.api.loadDashboard());
+
+  Future<void> _toggleTaskStatus(DeadlineTask task) async {
+    setState(() => _updatingTaskIds.add(task.id));
+    try {
+      await widget.api.updateTaskStatus(task.id, task.status == 'done' ? 'todo' : 'done');
+      _refresh();
+    } on ApiException catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error.message)));
+      }
+    } finally {
+      if (mounted) setState(() => _updatingTaskIds.remove(task.id));
+    }
+  }
 
   Future<void> _signOut() async {
     await widget.api.signOut();
@@ -234,7 +249,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
         final project = projects.where((item) => item.id == task.projectId).firstOrNull;
         return Padding(
           padding: const EdgeInsets.only(bottom: 9),
-          child: _TaskTile(task: task, projectName: project?.name ?? 'Project'),
+          child: _TaskTile(
+            task: task,
+            projectName: project?.name ?? 'Project',
+            isUpdating: _updatingTaskIds.contains(task.id),
+            onToggle: () => _toggleTaskStatus(task),
+          ),
         );
       }).toList(),
     );
@@ -406,10 +426,17 @@ class _ProjectTile extends StatelessWidget {
 }
 
 class _TaskTile extends StatelessWidget {
-  const _TaskTile({required this.task, required this.projectName});
+  const _TaskTile({
+    required this.task,
+    required this.projectName,
+    required this.isUpdating,
+    required this.onToggle,
+  });
 
   final DeadlineTask task;
   final String projectName;
+  final bool isUpdating;
+  final VoidCallback onToggle;
 
   @override
   Widget build(BuildContext context) {
@@ -420,8 +447,24 @@ class _TaskTile extends StatelessWidget {
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(13)),
       child: Row(
         children: [
-          Icon(completed ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded, color: completed ? const Color(0xFF73A73B) : const Color(0xFFABB5AC), size: 21),
-          const SizedBox(width: 12),
+          IconButton(
+            tooltip: completed ? 'Reopen task' : 'Mark task complete',
+            onPressed: isUpdating ? null : onToggle,
+            icon: isUpdating
+                ? const SizedBox.square(
+                    dimension: 19,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Icon(
+                    completed
+                        ? Icons.check_circle_rounded
+                        : Icons.radio_button_unchecked_rounded,
+                    color: completed
+                        ? const Color(0xFF73A73B)
+                        : const Color(0xFFABB5AC),
+                    size: 21,
+                  ),
+          ),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

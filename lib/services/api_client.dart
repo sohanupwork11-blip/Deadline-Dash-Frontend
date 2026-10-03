@@ -106,6 +106,10 @@ class ApiClient {
     });
   }
 
+  Future<void> updateTaskStatus(int taskId, String status) async {
+    await _send('PATCH', '/tasks/$taskId/', body: {'status': status});
+  }
+
   List<Map<String, dynamic>> _items(Map<String, dynamic> response) {
     final values = response['results'] as List<dynamic>? ?? const [];
     return values.cast<Map<String, dynamic>>();
@@ -130,6 +134,8 @@ class ApiClient {
           response = await _http.get(uri, headers: headers);
         case 'POST':
           response = await _http.post(uri, headers: headers, body: jsonEncode(body));
+        case 'PATCH':
+          response = await _http.patch(uri, headers: headers, body: jsonEncode(body));
         default:
           throw const ApiException('Unsupported request method.');
       }
